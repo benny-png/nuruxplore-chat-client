@@ -13,6 +13,7 @@ instead of one generic message.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -57,15 +58,154 @@ class NuruXploreClient:
 
     # --------------------------------------------------------------- project
 
-    def create_project(self, title: str = "API integration test session") -> str:
-        """Create a chat project and remember its ``uuid`` (reused on later runs)."""
-        body = self._request("POST", "/api/projects", json={"title": title, "type": "chat"})
+    def create_project(
+        self,
+        title: str = "API integration test session",
+        type: str = "chat",
+        auto_title: bool | None = None,
+    ) -> str:
+        """Create a project (``chat``, ``proposal`` or ``thesis``) and remember its uuid.
+
+        ``auto_title`` defaults to True server-side (the AI generates an academic
+        title from the prompt); pass ``False`` to keep ``title`` exactly as typed.
+        """
+        body = self._request(
+            "POST",
+            "/api/projects",
+            json={**{"title": title, "type": type}, **({"auto_title": auto_title} if auto_title is not None else {})},
+        )
         project = body.get("project") or {}
         uuid = project.get("uuid") or body.get("uuid")
         if not uuid:
             raise ApiError("http", "Project response did not contain a uuid.")
         self.project_uuid = str(uuid)
         return self.project_uuid
+
+    # ------------------------------------------------------- research profile
+
+    def build_research_profile(self, project_uuid: str) -> dict:
+        """Ask the AI to build a structured research profile from the topic (3 credits).
+
+        Returns the parsed body, including the ``profile`` dict under review.
+        """
+        return self._request(
+            "POST", f"/api/projects/{project_uuid}/build-research-profile"
+        )
+
+    def approve_research_profile(
+        self, project_uuid: str, research_profile: dict | None = None
+    ) -> dict:
+        """Approve the research profile, optionally with edits (free)."""
+        return self._request(
+            "POST",
+            f"/api/projects/{project_uuid}/approve-research-profile",
+            json={"research_profile": research_profile} if research_profile is not None else {},
+        )
+
+    def generate_outline(self, project_uuid: str) -> dict:
+        """Generate the chapter outline from the approved profile (5 credits)."""
+        return self._request("POST", f"/api/projects/{project_uuid}/generate-outline")
+
+    def generate_complete(self, project_uuid: str, type: str) -> dict:
+        """Queue full document generation (100 proposal / 400-600 thesis credits).
+
+        Charged up front. Returns the parsed 202 body (``{"queued": true, ...}``).
+        A 402 surfaces as ``ApiError("out_of_credits", ...)`` via ``_ensure_success``.
+        """
+        return self._request(
+            "POST",
+            f"/api/projects/{project_uuid}/generate-complete",
+            json={"type": type},
+        )
+
+    def generation_status(self, project_uuid: str) -> dict:
+        """Return the current background-generation status.
+
+        Includes ``status`` (queued/building_profile/generating/completed/failed),
+        ``progress``, ``current_step``, ``steps`` and ``word_count``.
+        """
+        return self._request("GET", f"/api/projects/{project_uuid}/generation-status")
+
+    def export_document(self, project_uuid: str, fmt: str) -> dict:
+        """Export the finished document as ``pdf`` (free) or ``word`` (1 credit).
+
+        Returns the body including a signed ``download_url``.
+        """
+        return self._request("POST", f"/api/projects/{project_uuid}/export/{fmt}")
+
+    # ------------------------------------------------------------- sources
+
+    def upload_source(
+        self,
+        project_uuid: str,
+        file_path: str,
+        *,
+        title: str | None = None,
+        document_role: str | None = None,
+        type: str | None = None,
+    ) -> dict:
+        """Upload a research source file (PDF/DOCX/TXT/CSV/XLSX) to a project.
+
+        The live API requires an uploaded, extracted source before it will
+        build a research profile (otherwise build-research-profile returns
+        422). ``document_role``/``type`` select how the file is treated
+        (``proposal``, ``dataset`` or ``reference``); ``title`` defaults to the
+        filename. Returns the parsed body incl. the created source id.
+        """
+        if not self.token:
+            raise ApiError("auth", "Not authenticated. Call login() first.")
+        url = self.base_url + "/api/sources/upload"
+        headers = {"Authorization": f"Bearer {self.token}"}
+        data: dict = {"project_uuid": project_uuid}
+        if title:
+            data["title"] = title
+        if document_role:
+            data["document_role"] = document_role
+        if type:
+            data["type"] = type
+        with open(file_path, "rb") as fh:
+            files = {"file": (Path(file_path).name, fh)}
+            try:
+                response = self._session.request(
+                    "POST", url, headers=headers, data=data, files=files, timeout=self.timeout
+                )
+            except requests.exceptions.Timeout as exc:
+                raise ApiError("network", f"Request timed out after {self.timeout:g}s.", None) from exc
+            except requests.exceptions.RequestException as exc:
+                raise ApiError("network", f"Network error: {exc}") from exc
+        self._ensure_success(response)
+        try:
+            return response.json()
+        except ValueError:
+            raise ApiError(
+                "http",
+                f"Unexpected response (HTTP {response.status_code}, not JSON)",
+                response.status_code,
+            )
+
+    def upload_proposal(self, project_uuid: str, file_path: str, title: str | None = None) -> dict:
+        """Upload a proposal source file so it can drive research-profile building."""
+        return self.upload_source(
+            project_uuid,
+            file_path,
+            title=title or str(Path(file_path).name),
+            document_role="proposal",
+            type="proposal",
+        )
+
+    def upload_dataset(self, project_uuid: str, file_path: str, title: str | None = None) -> dict:
+        """Upload a dataset source file (surveys/results) to the project."""
+        return self.upload_source(
+            project_uuid,
+            file_path,
+            title=title or str(Path(file_path).name),
+            document_role="dataset",
+            type="dataset",
+        )
+
+    def verify_source(self, source_id: str) -> dict:
+        """Ask the API to re-verify/extract an already-uploaded source (optional)."""
+        return self._request("POST", f"/api/sources/{source_id}/verify")
 
     def ensure_project(self, title: str = "API integration test session") -> str:
         """Return the remembered project, creating one if we don't have it yet."""

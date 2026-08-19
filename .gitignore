@@ -2,6 +2,9 @@
 .env
 .state.json
 
+# Generated artifacts (proposal exports from the demo run)
+exports/
+
 # Python
 __pycache__/
 *.py[cod]

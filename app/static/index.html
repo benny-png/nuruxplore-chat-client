@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NuruXplore — Academic Writing Assistant</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">✦ NuruXplore</div>
+  <div class="topbar-right">
+    <span id="credits" class="credits" hidden>⚡ -- credits</span>
+    <span id="userLabel" class="userlabel" hidden></span>
+    <button id="logoutBtn" class="btn ghost" hidden>Log out</button>
+  </div>
+</header>
+
+<!-- Login screen -->
+<section id="loginScreen" class="screen" hidden>
+  <form id="loginForm" class="card login-card">
+    <h2>Log in</h2>
+    <p class="hint">Enter the NuruXplore test-account credentials to start. (The app never stores or shows your token.)</p>
+    <label>Email <input id="loginEmail" type="email" required autocomplete="username"></label>
+    <label>Password <input id="loginPassword" type="password" required autocomplete="current-password"></label>
+    <button class="btn primary" type="submit">Log in</button>
+    <div id="loginError" class="banner" hidden></div>
+  </form>
+</section>
+
+<!-- Main app (chat + research) -->
+<section id="appScreen" class="screen" hidden>
+  <nav class="tabs">
+    <button class="tab active" data-mode="chat">💬 General Chat</button>
+    <button class="tab" data-mode="research">🔬 Research Expert</button>
+  </nav>
+
+  <!-- ================= CHAT ================= -->
+  <div id="chatMode" class="mode">
+    <div class="card">
+      <div id="chatTitleInputRow">
+        <label>Project title <input id="chatProjectTitle" value="API integration test session" placeholder="Project title"></label>
+        <button id="chatNewProjectBtn" class="btn">New chat</button>
+      </div>
+      <div id="chatLog" class="chat-log">
+        <div class="msg hint">Create a chat project, then send a message. Keep messages conversational (each reply costs 1 credit).</div>
+      </div>
+      <form id="chatForm" class="chat-input">
+        <input id="chatInput" placeholder="What's a good way to summarize survey response frequencies?" autocomplete="off">
+        <button class="btn primary" type="submit">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= RESEARCH ================= -->
+  <div id="researchMode" class="mode" hidden>
+    <div class="card">
+      <div class="res-type">
+        <button class="res-type-btn active" data-type="proposal">📋 Research Proposal</button>
+        <button class="res-type-btn" data-type="thesis">📄 Full Thesis</button>
+        <span id="resCost" class="res-cost">~100 credits</span>
+      </div>
+      <label>Topic / prompt
+        <textarea id="resTopic" rows="3" placeholder="e.g. Impact of mobile money on smallholder farmers in Tanzania"></textarea>
+      </label>
+      <button id="createResBtn" class="btn primary">1 · Create project</button>
+
+      <div id="resFlow" class="flow" hidden>
+        <div class="step" id="stepUpload" hidden>
+          <h3>Upload source context</h3>
+          <p class="hint">The API needs an uploaded proposal/dataset (PDF/DOCX/TXT/CSV/XLSX) — it refuses to build a research profile without extracted source text.</p>
+          <input id="sourceFile" type="file" accept=".pdf,.docx,.txt,.csv,.xlsx">
+          <select id="sourceRole">
+            <option value="proposal">Proposal</option>
+            <option value="dataset">Dataset</option>
+            <option value="reference">Reference</option>
+          </select>
+          <button id="uploadSrcBtn" class="btn primary">2 · Upload source</button>
+        </div>
+        <div class="step" id="stepProfile" hidden>
+          <button id="buildProfileBtn" class="btn">3 · Build research profile (+3)</button>
+        </div>
+        <div class="step" id="stepApprove" hidden>
+          <h3>Research profile — review & approve</h3>
+          <textarea id="profileJson" rows="10" spellcheck="false"></textarea>
+          <button id="approveProfileBtn" class="btn primary">4 · Approve profile</button>
+        </div>
+        <div class="step" id="stepOutline" hidden>
+          <button id="buildOutlineBtn" class="btn">5 · Generate outline (+5)</button>
+          <div id="outlineBox" class="outline"></div>
+        </div>
+        <div class="step" id="stepGenerate" hidden>
+          <button id="generateBtn" class="btn danger">6 · Generate document</button>
+          <div id="genCost" class="gen-cost"></div>
+        </div>
+        <div class="step" id="stepPoll" hidden>
+          <div class="progress-wrap">
+            <div class="progress-track"><div id="progressBar" class="progress-fill" style="width:0%"></div></div>
+            <div id="progressLabel" class="progress-label">0%</div>
+          </div>
+          <div id="currentStep" class="current-step"></div>
+          <ul id="stepList" class="step-list"></ul>
+        </div>
+        <div class="step" id="stepDone" hidden>
+          <p class="ok">✅ Document generated.</p>
+          <button id="exportPdfBtn" class="btn">📥 Export PDF</button>
+          <button id="exportWordBtn" class="btn">📥 Export Word</button>
+        </div>
+      </div>
+
+      <div id="resError" class="banner" hidden></div>
+    </div>
+  </div>
+</section>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

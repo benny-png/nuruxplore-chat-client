@@ -1,163 +1,196 @@
-# NuruXplore Chat API Client
+# NuruXplore Chat Client & Web App
 
-A small command-line client for the live NuruXplore AI chat API (Part 2 of the
-intern take-home exercise). It logs in with a test account, creates (or reuses) a
-chat project, sends a message you type (or pass as an argument) and prints the
-AI's reply — while handling the ways a real API actually fails: bad credentials,
-rate limits, running out of credits, and network/timeout errors.
+A Python client **and** a deployable FastAPI web app for the live NuruXplore AI
+academic-writing API (`https://nuruxplore.com/api`). It covers both halves of
+the product:
 
-This is written against the *live* API at `https://nuruxplore.com`, so it has
-real authentication, real rate limits, a real finite credit budget and real
-error responses.
+- **Chat** — log in, create a project, send conversational messages (1 credit each).
+- **Proposal / thesis generation** — the core feature: turn a topic + uploaded
+  source context into a full academic proposal or thesis via a multi-step flow
+  (create → upload source → build research profile → approve → outline →
+  generate as a background job → poll to completion → export PDF/Word).
+
+Everything AI goes through the NuruXplore API — **never** Groq or any other AI
+provider directly. Written against the real, live API, so it has real
+authentication, real rate limits, a real finite credit budget, and real failure
+modes — all surfaced distinctly in the UI.
 
 ---
+
+## Architecture
+
+```
+Browser (vanilla JS SPA)
+   │  /api/local/*            (only origin-relative calls, no token)
+   ▼
+FastAPI app (app/main.py)
+   │  holds the Bearer token server-side, proxies to the live API
+   ▼
+NuruXplore API (https://nuruxplore.com/api)
+```
+
+The Bearer token is created and held **server-side only** — it is never sent to
+the browser and never committed to source. Credentials are read from the
+environment (Render secrets) or the gitignored `.env`. The app auto-provisions a
+session when `NURUXPLORE_EMAIL` / `NURUXPLORE_PASSWORD` are set; otherwise it
+shows a login form.
 
 ## Requirements
 
 - Python 3.9+
-- `pip` (to install `requests` and `pytest`)
 
 ## Setup
 
 ```bash
-# 1. Clone / cd into the repo, then create a virtualenv
 python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-
-# 2. Install dependencies
+source .venv/bin/activate              # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 3. Create your config from the template (never commit real credentials)
-cp .env.example .env
-#    then edit .env and fill in NURUXPLORE_EMAIL / NURUXPLORE_PASSWORD
+cp .env.example .env                   # fill in your test-account credentials (gitignored)
 ```
 
-> **Important:** `.env` and `.state.json` are gitignored. `.env` holds real
-> credentials; `.state.json` caches the bearer token and the chat project's
-> `uuid` so later runs reuse the project instead of creating new ones (and
-> spending credits) each time. Neither is ever committed.
+`NURUXPLORE_BASE_URL` is documented as the **host** (`https://nuruxplore.com`);
+the documented endpoints already carry the `/api` prefix (e.g.
+`/api/auth/login`), so do _not_ add a trailing `/api`.
 
-## Usage
+## Run the web app locally
 
 ```bash
-# Send a message passed as an argument
-python -m nuruxplore.cli "What's a good way to summarize survey response frequencies?"
-
-# Interactive prompt
-python -m nuruxplore.cli
-
-# Read the message from stdin
-echo "Hello there" | python -m nuruxplore.cli
-
-# Override credentials / force a specific project (advanced)
-python -m nuruxplore.cli "hi" -e you@example.com -p 'your-password' --project SOME_UUID
+uvicorn app.main:app --reload --port 8000
+# open http://localhost:8000
 ```
 
-On success you'll see the AI's reply followed by the running credit balance:
+## UI flows
 
-```
-AI reply:
-A histogram plus a sorted frequency table works well.
+**Research Expert (proposal / thesis)** — a guided multi-step flow:
 
-[credits remaining: 23]
-```
+1. **Create project** (type `proposal` or `thesis`).
+2. **Upload source context** — the live API refuses to build a research profile
+   without an uploaded, extracted source (PDF/DOCX/TXT/CSV/XLSX). Upload a
+   proposal or dataset here.
+3. **Build research profile** (+3) — the AI builds a structured profile from
+   your topic + uploaded source.
+4. **Approve profile** (free) — editable JSON, review before continuing.
+5. **Generate outline** (+5).
+6. **Generate document** (charged up front) — confirm before you fire it.
+7. **Poll** — a progress bar + step list from the status endpoint; never hammers
+   the status endpoint (poll every 2s, hard stop after ~12 minutes or on a
+   failed job).
+8. **Export** the finished document as **PDF** (free) or **Word** (1 credit).
 
-### Exit codes
+Distinct error banners cover: bad credentials (401), rate limiting (429),
+insufficient credits (402), a failed generation job (`generation_failed`), and
+network/timeout errors.
 
-Failure is reported as a single clear line (never a raw stack trace) with a
-distinct exit code per failure kind, so the client is scriptable:
+## Cost table
 
-| Code | Meaning |
-|------|---------|
-| 0    | Success |
-| 2    | Auth failure (invalid credentials / expired session) |
-| 3    | Rate limit (429) hit repeatedly |
-| 4    | Out of credits |
-| 5    | Other HTTP error (e.g. 500) |
-| 6    | Network / timeout error |
+| Step | Cost |
+|------|------|
+| Build research profile | 3 credits |
+| Approve research profile | Free |
+| Generate outline | 5 credits |
+| Generate complete — proposal | 100 credits |
+| Generate complete — thesis | 400–600 credits |
+| Chat message | 1 credit |
+| PDF export | Free |
+| Word export | 1 credit |
 
-### Runtime safety
-
-- The chat endpoint detects research-writing intent and can switch into full
-  document-generation mode, which burns many credits in one call. This client
-  sends ordinary conversational messages only (see the example above).
-- 429 responses are retried with **bounded exponential backoff** (max 3 retries,
-  honoring the server's `Retry-After` when present) rather than hammering the
-  endpoint — a tight retry loop would end a fixed-budget session early.
-- Credentials are only used in memory and for the login request; they are never
-  written to disk except in the gitignored `.env`.
+The test budget is fixed and won't be topped up, so the UI confirms before the
+expensive generate call, and the demo client refuses to fire it below the
+documented cost.
 
 ## Tests
 
-All tests mock the HTTP layer — they run offline, spend **zero** credits, and
-never touch the live API.
+All HTTP is mocked — they run offline, spend **zero** credits, and never touch
+the live API. Failure modes (401/429/402/network/failed-job) are exercised
+deterministically for chat, the full proposal flow, and upload.
 
 ```bash
-python -m pytest -q
+python -m pytest -q        # 37 passed
 ```
 
-Covered failure modes:
+## Deploy (Render)
 
-- login success, bad credentials (401), missing token in response
-- project creation, and reusing a remembered project without any HTTP call
-- send-message success (reply + credit balance)
-- out-of-credits (via `credits_remaining: 0` and via HTTP 402)
-- rate limiting: 429 retries with backoff, recovering after a 429, and failing
-  cleanly after the retry budget is exhausted
-- expired-token re-authentication (401 → re-login → retry) without an infinite
-  loop, plus a genuine credential failure
-- network timeouts and connection errors
-- unexpected 5xx
+`render.yaml` declares a free Python web service (`uvicorn app.main:app`).
+Connect this repo to Render and set `NURUXPLORE_EMAIL` / `NURUXPLORE_PASSWORD`
+as secrets. Alternatively, deploy anywhere that runs Python and set the same env
+vars.
+
+## Demo script
+
+`scripts/run_proposal_demo.py` runs one full proposal cycle from the CLI (also
+useful as a smoke test against the live API):
+
+```bash
+# free: just check the live credit balance
+python scripts/run_proposal_demo.py --check-only
+
+# dry run through the profile/outline steps (~8 credits)
+python scripts/run_proposal_demo.py --no-generate --source ./my_proposal.pdf
+
+# one full proposal (upload → profile → approve → outline → generate → poll → export)
+python scripts/run_proposal_demo.py --yes --source ./my_proposal.pdf --out ./exports
+```
+
+It prints the credit balance, never prints a token, and refuses the expensive
+call if the balance can't cover it.
 
 ---
 
-## Notes on the live verification
+## The command-line client (original)
 
-During development I ran the client against the real API. Login, project
-creation, message dispatch and the credit balance all worked end-to-end
-(`credits_balance` started at 25 and decremented by 1 per message). At the time
-of that run the upstream AI backend was itself returning
-`"Unable to connect to AI service."`, so I did not get a substantive AI reply and
-deliberately stopped spending the fixed credit budget rather than retrying
-against a broken service. The client surfaces whatever the API returns verbatim,
-including upstream error strings.
+`python -m nuruxplore.cli "message"` — a small CLI that logs in, creates/reuses a
+chat project and prints the AI reply with the running credit balance. Exit codes:
 
-## What I'd do differently with more time
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 2 | Auth failure |
+| 3 | Rate limit (429) exhausted |
+| 4 | Out of credits |
+| 5 | Other HTTP error |
+| 6 | Network / timeout |
 
-- **Transport**: a typed, schema-validated client (e.g. OpenAPI/`openapi-python-client`)
-  would catch contract drift up front. The 404 I hit here (doubled `/api/api`)
-  is exactly the kind of thing a generated client or a quick contract test
-  prevents.
-- **Auth**: real refresh-token handling and secure credential storage
-  (keyring / env secrets) instead of a plain `.env`.
-- **Retries**: distinguish idempotent (GET, safe) vs non-idempotent (message POST)
-  requests and only auto-retry non-idempotent calls after an explicit
-  "confirm re-send" — a blind retry of a POST can double-spend a credit.
-- **Rate limiting**: an in-client token bucket paced to the documented limit,
-  not just backoff on 429.
-- **Observability**: structured logging + a `--dry-run`/`--cost` flag so the
-  credit spend is visible before a real call.
-- **Detecting upstream AI failures**: heuristics for "the API returned 200 but
-  the reply is an upstream error string", rather than treating it as a success.
+---
+
+## Live verification notes
+
+During development I ran the real flow against the live API:
+
+- **Finding — undocumented upload step.** The brief's 12 endpoints don't include
+  file upload, but the live `build-research-profile` endpoint returns **HTTP
+  422** (`"No extracted proposal/source text found. Upload a PDF/DOCX/TXT/CSV/
+  XLSX file first…"`) unless a source is uploaded first. I discovered the upload
+  contract from the product's own frontend client (`POST /api/sources/upload`,
+  multipart `project_uuid` + `file` + `title` + `document_role` + `type`) and
+  added it to the client, the web app, and the demo script.
+- **One real, successful proposal generation ran end-to-end** against the live
+  API (test account, 150-credit budget, project
+  `64cb1fc2-3a44-4311-ab52-ca5126112151`): uploaded a sample research proposal
+  (extraction OK), built + approved the profile, generated a 9-chapter outline,
+  queued full generation, polled `queued → generating_sections (38→100%) →
+  completed`, and exported both PDF and Word.
 
 ## AI assistance
 
-This exercise permits and expects AI tooling. I built it with Claude Code
-(Claude Code CLI). Prompts I used (paraphrased):
+This exercise permits and expects AI tooling. Built with Claude Code (Claude Code
+CLI). Prompts used (paraphrased):
 
-1. "Read the API-integration PDF spec and plan a Python CLI client for
-   https://nuruxplore.com, with distinct handling for 401/429/out-of-credits/
-   network errors, mocked HTTP tests, a README, and a push to a public GitHub
-   repo."
-2. "Structure it as a small package with an injected HTTP session so tests can
-   stub the HTTP layer — `config.py` (`.env` loader), `errors.py` (typed
-   `ApiError` kinds), `client.py`, `cli.py`, and `tests/`."
-3. "Why did the first live run 404? What's the right base-URL/endpoint split?"
-   → turned out the base URL must be the host (`https://nuruxplore.com`) with
-   `/api/*` as part of the endpoint paths; I fixed config + `.env`.
-4. "Add edge-case tests: expired-token re-auth without infinite loop, rate-limit
-   retry then recovery/failure, out-of-credits via header and status."
+1. "Implement Task 3 (UPDATE 2): add a proposal/thesis generation flow to the
+   existing client — create, build/approve research profile, generate outline,
+   generate-complete (background job), poll status, export PDF/Word — with
+   distinct 401/429/402/network/failed-job handling."
+2. "Stand it up as a reusable web app that proxies the live API: FastAPI backend
+   holding the token server-side, vanilla-JS single-page UI with a progress bar /
+   step list, confirm-before-fire on the expensive call, and error-kind banners."
+3. "Write mocked-HTTP tests so every failure mode is exercised without spending
+   credits or depending on the live API; keep the app and client under test."
+4. "The live API rejects build-research-profile with 422 without uploaded source
+   context — find the upload contract from the product's own frontend client and
+   wire upload into the client, app, UI, tests, and demo script."
+5. "Deploy on Render (render.yaml), push to a public GitHub repo, document setup /
+   cost table / AI prompts in the README, and verify one real proposal runs."
 
-All decisions (language, structure, error taxonomy, retry policy, base-URL
-handling, the decision not to burn the credit budget against a broken upstream)
-were mine; the assistant executed and reviewed code as I directed it.
+All decisions (language, architecture, token handling, error taxonomy, polling
+policy, the upload addition, not committing secrets) were mine; the assistant
+executed and reviewed code as I directed.

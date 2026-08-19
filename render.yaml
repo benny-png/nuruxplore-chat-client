@@ -1,0 +1,23 @@
+# Render blueprint for the NuruXplore look-alike web app.
+#
+# The app proxies every AI call to the live NuruXplore API. It can run with a
+# login form (no env needed) or auto-provision a session when the test-account
+# credentials are set as secrets.
+services:
+  - type: web
+    name: nuruxplore-chat-client
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: NURUXPLORE_BASE_URL
+        value: https://nuruxplore.com
+      # Test-account credentials — set these as Render secrets (never commit).
+      - key: NURUXPLORE_EMAIL
+        sync: false
+      - key: NURUXPLORE_PASSWORD
+        sync: false
+      - key: NURUXPLORE_TIMEOUT
+        value: "30"
