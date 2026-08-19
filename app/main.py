@@ -35,7 +35,8 @@ ENV_PASSWORD = os.environ.get("NURUXPLORE_PASSWORD")
 SESS_COOKIE = "nurux_session"
 
 app = FastAPI(title="NuruXplore Web App")
-STATIC_DIR = Path(__file__).parent / "static"
+# Built React frontend (Vite) — `npm run build` in web/ produces web/dist.
+STATIC_DIR = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 # A failed background-generation job is a *successful* HTTP response whose
 # body carries status="failed". We surface it as this structured dict so the UI
@@ -293,8 +294,10 @@ async def _run(request: Request, fn):
 
 
 # ------------------------------------------------------------ static UI
+# Serve the built React SPA. Assets live under /assets (Vite output); the root
+# returns index.html. The API lives under /api/local/* (registered above).
 
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")
 
 
 @app.get("/")

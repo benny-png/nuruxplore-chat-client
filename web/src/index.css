@@ -1,0 +1,279 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ========================================================================
+   RUBRIC & FOLIO — NuruXplore redesign (edit. direction from the awesom-e
+   gen-ui anti-slop review: warm paper-and-ink, ONE vermillion accent,
+   hairline borders + flat surfaces, three real type families, paper grain.
+   No aurora gradients, no frosted glass, no purple.
+======================================================================== */
+
+:root {
+  /* light — warm paper */
+  --bg: #f5f0e7;
+  --surface: #fbf7ef;
+  --surface-raised: #fffdf7;
+  --surface-ink: #2b2419;
+  --border: #dfd6c3;
+  --border-strong: #cfc4af;
+  --text: #211c13;
+  --muted-text: #6e6451;
+  --accent: #c2401f;
+  --accent-text: #fbf6ef;
+  --accent-soft: #f3d8c8;
+  --success: #3f6b47;
+  --warning: #a8752b;
+  --danger: #962b26;
+  --shadow: 0 1px 2px rgba(40, 30, 15, 0.08);
+
+  /* aliases used by shadcn-style components */
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--text);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-text);
+  --secondary: var(--surface-raised);
+  --secondary-foreground: var(--text);
+  --muted: var(--surface-raised);
+  --muted-foreground: var(--muted-text);
+  --accent-bg: var(--accent-soft);
+  --accent-foreground: var(--accent);
+  --destructive: var(--danger);
+  --destructive-foreground: #fbf6ef;
+  --border: var(--border);
+  --input: var(--border-strong);
+  --ring: var(--accent);
+  --success-var: var(--success);
+  --warning-var: var(--warning);
+  --brand-1: var(--accent);
+  --brand-2: #9c3016;
+  --glow-1: var(--accent);
+  --glow-2: var(--accent);
+  --glow-3: var(--accent);
+  --sidebar: var(--surface);
+}
+
+.dark {
+  /* dark — warm near-black paper */
+  --bg: #17140e;
+  --surface: #1e1a12;
+  --surface-raised: #272016;
+  --surface-ink: #120f0a;
+  --border: #363021;
+  --border-strong: #463d2c;
+  --text: #ebe3d0;
+  --muted-text: #9b8f7a;
+  --accent: #e2552b;
+  --accent-text: #1f1510;
+  --accent-soft: #3a231c;
+  --success: #79a573;
+  --warning: #c69b52;
+  --danger: #a22e2c;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--text);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-text);
+  --secondary: var(--surface-raised);
+  --secondary-foreground: var(--text);
+  --muted: var(--surface-raised);
+  --muted-foreground: var(--muted-text);
+  --accent-bg: var(--accent-soft);
+  --accent-foreground: var(--accent);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--surface-raised);
+  --border: var(--border);
+  --input: var(--border-strong);
+  --ring: var(--accent);
+  --success-var: var(--success);
+  --warning-var: var(--warning);
+  --brand-1: var(--accent);
+  --brand-2: #e98a2b;
+  --glow-1: var(--accent);
+  --glow-2: var(--accent);
+  --glow-3: var(--accent);
+  --sidebar: var(--surface);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent-bg);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success-var);
+  --color-warning: var(--warning-var);
+  --color-brand-1: var(--brand-1);
+  --color-brand-2: var(--brand-2);
+  --color-glow-1: var(--glow-1);
+  --color-glow-2: var(--glow-2);
+  --color-glow-3: var(--glow-3);
+  --color-sidebar: var(--sidebar);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius: 8px;
+
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "Public Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    background-color: var(--bg);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background-color: var(--accent-soft);
+    color: var(--text);
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* ---- paper grain: a fixed, full-viewport feTurbulence texture --------- */
+.paper-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+:root:not([data-theme="light"]) .paper-grain {
+  mix-blend-mode: screen;
+}
+.dark .paper-grain {
+  mix-blend-mode: screen;
+}
+
+/* ---- folio eyebrow: wide-tracked small-caps mono label ----------------- */
+.folio {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-text);
+}
+
+/* ---- rubric stroke: the one governing signature mark ------------------ */
+.rubric {
+  position: relative;
+  padding-bottom: 6px;
+}
+.rubric::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  height: 3px;
+  width: 58px;
+  background-color: var(--accent);
+}
+
+/* the brand mark: a printer's registration / crosshair */
+.regmark {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 1em;
+  height: 1em;
+  color: var(--accent);
+}
+.regmark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.regmark::before {
+  content: "";
+  position: absolute;
+  inset: 3%;
+  border: 0.09em solid currentColor;
+  border-radius: 50%;
+}
+
+/* ---- brand logo: flat accent, NO gradient aurora ---------------------- */
+.brand-gradient {
+  background-color: var(--accent);
+  color: var(--accent-text);
+}
+.brand-text {
+  color: var(--accent);
+}
+
+/* ---- surfaces: flat solid, crisp hairline, tight shadow ------------- */
+.glass {
+  background-color: var(--surface);
+}
+.glow-shell {
+  background-color: var(--background);
+}
+
+/* thin square scrollbars */
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 0;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* inputs default to the flat paper field */
+input,
+textarea {
+  box-shadow: none;
+}
