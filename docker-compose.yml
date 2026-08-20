@@ -9,8 +9,8 @@
 services:
   web:
     build:
-      context: .
-      dockerfile: Dockerfile.web
+      context: ./frontend
+      dockerfile: Dockerfile
     image: nuruxplore-web
     container_name: nuruxplore-web
     restart: unless-stopped
@@ -23,8 +23,8 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: Dockerfile.api
+      context: ./backend
+      dockerfile: Dockerfile
     image: nuruxplore-api
     container_name: nuruxplore-api
     restart: unless-stopped

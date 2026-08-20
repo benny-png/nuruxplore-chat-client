@@ -36,7 +36,7 @@ SESS_COOKIE = "nurux_session"
 
 app = FastAPI(title="NuruXplore Web App")
 # Built React frontend (Vite) — `npm run build` in web/ produces web/dist.
-STATIC_DIR = Path(__file__).resolve().parent.parent / "web" / "dist"
+STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 # A failed background-generation job is a *successful* HTTP response whose
 # body carries status="failed". We surface it as this structured dict so the UI

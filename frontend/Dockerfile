@@ -1,13 +1,14 @@
 # React frontend image: prebuilt SPA served by nginx, which also reverse-proxies
 # /api/* to the FastAPI container (keeps auth same-origin).
+# Build context = frontend/
 FROM node:20-alpine AS build
-WORKDIR /web
-COPY web/package.json web/package-lock.json ./
+WORKDIR /app
+COPY package.json package-lock.json ./
 RUN npm ci
-COPY web/ ./
+COPY . ./
 RUN npm run build
 
 FROM nginx:1.27-alpine
-COPY nginx.conf.web /etc/nginx/conf.d/default.conf
-COPY --from=build /web/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80

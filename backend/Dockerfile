@@ -1,4 +1,5 @@
 # FastAPI API-only image (the React frontend is served separately by nginx).
+# Build context = backend/
 FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
