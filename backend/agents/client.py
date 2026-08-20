@@ -71,14 +71,29 @@ class LLMClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        # Retry transient failures (network/timeout, 5xx, 429, provider overload).
+        # Generation calls are slow, so a single attempt can exceed the timeout
+        # under concurrency; a short backoff retry makes the graph robust.
         start = time.monotonic()
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=config.timeout())
-        except requests.exceptions.RequestException as exc:
-            raise AgentsError(f"DeepInfra request failed: {exc}") from exc
-        duration = time.monotonic() - start
-        if resp.status_code != 200:
+        attempts = 1 + config.retries()
+        resp = None
+        for attempt in range(attempts):
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=config.timeout())
+            except requests.exceptions.RequestException as exc:
+                if attempt < attempts - 1:
+                    time.sleep(2.0 * (attempt + 1))
+                    continue
+                raise AgentsError(f"DeepInfra request failed: {exc}") from exc
+            if resp.status_code == 200:
+                break
+            if resp.status_code in (429, 500, 502, 503, 504) and attempt < attempts - 1:
+                time.sleep(2.0 * (attempt + 1))
+                continue
             raise AgentsError(f"DeepInfra returned HTTP {resp.status_code}: {resp.text[:300]}")
+        duration = time.monotonic() - start
+        if resp is None:
+            raise AgentsError("DeepInfra request failed: no response")
 
         body = resp.json()
         usage = body.get("usage") or {}

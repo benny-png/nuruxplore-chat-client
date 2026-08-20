@@ -52,4 +52,9 @@ def optimizer_rounds() -> int:
 
 
 def timeout() -> float:
-    return float(os.environ.get("DEEPINFRA_TIMEOUT", "60"))
+    return float(os.environ.get("DEEPINFRA_TIMEOUT", "120"))
+
+
+def retries() -> int:
+    """Transient-failure retries per DeepInfra call (timeout/5xx/429)."""
+    return max(0, int(os.environ.get("DEEPINFRA_RETRIES", "2")))
