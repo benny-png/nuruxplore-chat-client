@@ -62,16 +62,18 @@ export function ResearchScreen({ onCredits, agentsOn }: { onCredits: () => void;
   const fail = (err: unknown) => toast.error(errorTitle((err as ApiError).kind));
 
   const createProject = async () => {
-    if (!topic.trim()) return toast.error("Enter a topic first.");
     setBusy("create");
+    // Topic is optional: a data-only thesis just uploads its source and builds
+    // the profile from that. Default title avoids a dead-end when blank.
+    const title = topic.trim() || "Untitled research document";
     try {
       const r = await api<{ project_uuid: string }>("/api/local/projects", {
         method: "POST",
-        body: { title: topic.trim(), type, auto_title: true },
+        body: { title, type, auto_title: !!topic.trim() },
       });
       setProjectUuid(r.project_uuid);
       setStep("upload");
-      toast.success("Project created");
+      toast.success(topic.trim() ? "Project created" : "Project created — upload your data to begin");
       onCredits();
     } catch (err) {
       fail(err);
@@ -81,8 +83,8 @@ export function ResearchScreen({ onCredits, agentsOn }: { onCredits: () => void;
   };
 
   const uploadSource = async () => {
+    if (!projectUuid) return toast.error("Create a project first, then upload into it.");
     if (!file) return toast.error("Choose a source file first (PDF/DOCX/TXT/CSV/XLSX).");
-    if (!projectUuid) return;
     setBusy("upload");
     const fd = new FormData();
     fd.append("file", file);
@@ -235,13 +237,13 @@ export function ResearchScreen({ onCredits, agentsOn }: { onCredits: () => void;
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="topic">Research topic / prompt</Label>
+            <Label htmlFor="topic">Research topic / prompt <span className="text-muted-foreground">(optional)</span></Label>
             <Textarea
               id="topic"
               rows={3}
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              placeholder="e.g. Impact of mobile money adoption on the financial inclusion of smallholder farmers in Tanzania"
+              placeholder="Optional — for data-only theses you can leave this blank and just upload your dataset/source."
             />
           </div>
         </CardContent>
