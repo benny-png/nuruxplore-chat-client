@@ -1,0 +1,20 @@
+# Secrets + local state — never bake into the image
+.env
+
+# Build artifacts / caches
+node_modules
+web/node_modules
+web/dist
+.venv
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# VCS / tooling
+.git
+.claude
+.vscode
+
+# Local demo exports
+exports/

@@ -1,0 +1,25 @@
+# NuruXplore web app (FastAPI + React).
+# Follows the Ecofy house pattern: one external docker network per project,
+# nginx-proxy-manager joins that network and reverse-proxies to the container
+# by name (no public host port; loopback port is for local debugging only).
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nuruxplore-app
+    container_name: nuruxplore-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "127.0.0.1:8010:8000"
+    networks:
+      - nuruxplore-network
+
+networks:
+  nuruxplore-network:
+    name: nuruxplore-network
+    driver: bridge
