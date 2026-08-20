@@ -74,9 +74,33 @@ export interface Me {
   credits_balance?: number;
 }
 
+export interface Usage {
+  calls?: number;
+  tokens_in?: number;
+  tokens_out?: number;
+  cost_est?: number;
+  duration_s?: number;
+  steps?: { name: string; duration_s?: number }[];
+}
+
 export interface ChatResult {
   reply: string;
   credits_remaining?: number;
+  agent?: "deepseek";
+  usage?: Usage;
+}
+
+export interface Prefs {
+  use_agents: boolean;
+  agents_available: boolean;
+  model?: string | null;
+}
+
+export interface AgentContent {
+  title?: string;
+  text: string;
+  word_count?: number;
+  agent?: "deepseek";
 }
 
 export interface ResearchProfile {

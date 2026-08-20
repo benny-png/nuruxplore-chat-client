@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Toaster } from "sonner";
-import { Moon, Sun, LogOut, Zap } from "lucide-react";
-import { api, type Me } from "./lib/api";
+import { Moon, Sun, LogOut, Zap, Cpu } from "lucide-react";
+import { api, type Me, type Prefs } from "./lib/api";
 import { cn } from "./lib/utils";
 import { Button } from "./components/ui/button";
 import { LoginScreen } from "./screens/LoginScreen";
@@ -11,6 +11,53 @@ import { ResearchScreen } from "./screens/ResearchScreen";
 type Mode = "chat" | "research";
 
 const THEME_KEY = "nx-theme";
+const AGENTS_KEY = "nx-agents";
+
+/** DeepSeek agent toggle — mirrored to localStorage and the backend session.
+ *  When the server has no key configured, the switch shows as disabled. */
+function useAgentsPref() {
+  const [on, setOn] = useState<boolean>(() => localStorage.getItem(AGENTS_KEY) === "1");
+  const [available, setAvailable] = useState(false);
+  const [model, setModel] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  const sync = useCallback(async () => {
+    try {
+      const p = await api<Prefs>("/api/local/prefs");
+      setOn(p.use_agents);
+      setAvailable(p.agents_available);
+      setModel(p.model ?? null);
+      localStorage.setItem(AGENTS_KEY, p.use_agents ? "1" : "0");
+    } catch {
+      /* logged out / offline — keep local state */
+    }
+  }, []);
+
+  useEffect(() => {
+    sync();
+  }, [sync]);
+
+  const toggle = async () => {
+    const next = !on;
+    setOn(next);
+    localStorage.setItem(AGENTS_KEY, next ? "1" : "0");
+    setSyncing(true);
+    try {
+      const p = await api<Prefs>("/api/local/prefs", { method: "POST", body: { use_agents: next } });
+      setOn(p.use_agents);
+      setAvailable(p.agents_available);
+      setModel(p.model ?? null);
+      localStorage.setItem(AGENTS_KEY, p.use_agents ? "1" : "0");
+    } catch {
+      setOn(!next); // revert on failure
+      localStorage.setItem(AGENTS_KEY, !next ? "1" : "0");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return { on, available, model, syncing, toggle, sync };
+}
 
 function useTheme() {
   const [dark, setDark] = useState<boolean>(() => {
@@ -27,6 +74,7 @@ function useTheme() {
 
 export default function App() {
   const { dark, toggle } = useTheme();
+  const agents = useAgentsPref();
   const [me, setMe] = useState<Me | null>(null);
   const [booted, setBooted] = useState(false);
   const [mode, setMode] = useState<Mode>("chat");
@@ -132,6 +180,35 @@ export default function App() {
             <span className="folio hidden text-muted-foreground md:inline">
               {me.user?.name || me.user?.email}
             </span>
+
+            {/* DeepSeek agent toggle */}
+            <button
+              role="switch"
+              aria-checked={agents.on}
+              aria-label="Toggle DeepSeek agents"
+              title={
+                agents.available
+                  ? `DeepSeek agents ${agents.on ? "on" : "off"}${agents.model ? ` (${agents.model})` : ""}`
+                  : "DeepSeek agents unavailable — no API key configured"
+              }
+              onClick={() => agents.available && !agents.syncing && agents.toggle()}
+              disabled={!agents.available || agents.syncing}
+              className={cn(
+                "hidden items-center gap-1.5 border border-(--border) px-2 py-1 text-xs sm:inline-flex",
+                agents.on ? "border-(--accent)/50 text-(--accent)" : "text-muted-foreground",
+                !agents.available && "cursor-not-allowed opacity-45",
+              )}
+            >
+              <Cpu className="size-3.5" />
+              <span className="font-mono">{agents.on ? "AGENTS ON" : "AGENTS OFF"}</span>
+              <span
+                className={cn(
+                  "inline-block size-2 rounded-full transition-colors",
+                  agents.on ? "bg-(--accent)" : "bg-muted-foreground/40",
+                )}
+              />
+            </button>
+
             <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
               {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </Button>
@@ -144,9 +221,9 @@ export default function App() {
 
       <main className="flex w-full flex-1 flex-col px-3 py-4 sm:px-5 sm:py-6">
         {mode === "chat" ? (
-          <ChatScreen onCredits={refreshMe} userKey={me.user?.email} />
+          <ChatScreen onCredits={refreshMe} userKey={me.user?.email} agentsOn={agents.on} />
         ) : (
-          <ResearchScreen onCredits={refreshMe} />
+          <ResearchScreen onCredits={refreshMe} agentsOn={agents.on} />
         )}
       </main>
     </div>

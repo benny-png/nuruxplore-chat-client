@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -27,6 +28,11 @@ from pydantic import BaseModel
 
 from nuruxplore.client import NuruXploreClient
 from nuruxplore.errors import ApiError
+
+import agents as agents_mod
+from agents.client import AgentsError, LLMClient
+from agents.orchestrator import Ledger
+from agents.graphs import chat_reply as agent_chat_reply, run_research as agent_run_research
 
 BASE_URL = os.environ.get("NURUXPLORE_BASE_URL", "https://nuruxplore.com").rstrip("/")
 TIMEOUT = float(os.environ.get("NURUXPLORE_TIMEOUT", "30"))
@@ -52,6 +58,8 @@ class _Session:
         self.password = password
         self.client = NuruXploreClient.from_credentials(BASE_URL, email, password, timeout=TIMEOUT)
         self._logged_in = False
+        # DeepSeek agent toggle, per session (mirrors the UI switch).
+        self.use_agents = False
 
     def ensure_login(self) -> NuruXploreClient:
         if not self._logged_in:
@@ -61,6 +69,24 @@ class _Session:
 
 
 _sessions: dict[str, _Session] = {}
+
+# In-memory agent-generated document state per project: the approved research
+# profile captured at approve-time, and the finished draft once generated.
+_agent_state: dict[str, dict] = {}
+
+
+def _agent_client() -> LLMClient | None:
+    """Return a configured DeepSeek client, or None if the toggle can't run."""
+    return LLMClient() if agents_mod.available() else None
+
+
+def _uses_agents(session) -> bool:
+    """True when this session's toggle is on AND the agent layer is configured.
+
+    Uses ``getattr`` so injected test fakes (which lack ``use_agents``) degrade
+    safely to the existing nuruxplore path.
+    """
+    return bool(getattr(session, "use_agents", False)) and agents_mod.available()
 
 
 def _load_session(request: Request) -> tuple[_Session | None, str]:
@@ -128,6 +154,38 @@ async def me(request: Request):
     return {"user": client.user, "credits_balance": (client.user or {}).get("credits_balance")}
 
 
+# ---------------------------------------------------------- prefs (agent toggle)
+
+
+class PrefsBody(BaseModel):
+    use_agents: bool
+
+
+def _prefs_payload(session: _Session) -> dict:
+    return {
+        "use_agents": bool(getattr(session, "use_agents", False)),
+        "agents_available": agents_mod.available(),
+        "model": agents_mod.model_name() if agents_mod.available() else None,
+    }
+
+
+@app.get("/api/local/prefs")
+async def get_prefs(request: Request):
+    session, sid = _load_session(request)
+    if session is None and sid is None:
+        return JSONResponse(status_code=401, content={"kind": "auth", "message": "Please log in."})
+    return _prefs_payload(session)
+
+
+@app.post("/api/local/prefs")
+async def set_prefs(body: PrefsBody, request: Request):
+    session, sid = _load_session(request)
+    if session is None and sid is None:
+        return JSONResponse(status_code=401, content={"kind": "auth", "message": "Please log in."})
+    session.use_agents = bool(body.use_agents)
+    return _prefs_payload(session)
+
+
 # --------------------------------------------------------------- chat
 
 
@@ -167,6 +225,27 @@ async def chat(body: ChatMessageBody, request: Request):
         client = session.ensure_login()
     except ApiError as exc:
         return _error_response(exc)
+
+    # DeepSeek agent path (opt-in): answers locally via the multi-agent graph,
+    # skipping nuruxplore's paid send_message entirely.
+    if _uses_agents(session):
+        agent_client = _agent_client()
+        try:
+            prior = _recent_messages(client, body.project_uuid, n=8)
+            reply, ledger = await agent_chat_reply(
+                agent_client, Ledger(), body.message, prior
+            )
+        except AgentsError as exc:
+            return JSONResponse(status_code=502, content={"kind": "agent", "message": str(exc)})
+        except ApiError as exc:
+            return _error_response(exc)
+        return {
+            "reply": reply,
+            "credits_remaining": (client.user or {}).get("credits_balance"),
+            "agent": "deepseek",
+            "usage": ledger.summary(),
+        }
+
     try:
         result = client.send_message(body.project_uuid, body.message)
     except ApiError as exc:
@@ -229,7 +308,13 @@ async def upload_source(
 
 @app.post("/api/local/projects/{project_uuid}/build-research-profile")
 async def build_profile(project_uuid: str, request: Request):
-    return await _run(request, lambda c, s: c.build_research_profile(project_uuid))
+    session, sid = _load_session(request)
+    if session is None and sid is None:
+        return JSONResponse(status_code=401, content={"kind": "auth", "message": "Please log in."})
+    result = await _run(request, lambda c, s: c.build_research_profile(project_uuid))
+    if isinstance(result, dict) and result.get("profile"):
+        _agent_state.setdefault(project_uuid, {})["profile"] = result["profile"]
+    return result
 
 
 class ApproveBody(BaseModel):
@@ -238,6 +323,12 @@ class ApproveBody(BaseModel):
 
 @app.post("/api/local/projects/{project_uuid}/approve-research-profile")
 async def approve_profile(project_uuid: str, body: ApproveBody, request: Request):
+    session, sid = _load_session(request)
+    if session is None and sid is None:
+        return JSONResponse(status_code=401, content={"kind": "auth", "message": "Please log in."})
+    # Remember the approved profile so the agent graph can run from it.
+    if body.research_profile:
+        _agent_state.setdefault(project_uuid, {})["profile"] = body.research_profile
     return await _run(request, lambda c, s: c.approve_research_profile(project_uuid, body.research_profile))
 
 
@@ -250,19 +341,101 @@ class GenerateBody(BaseModel):
     type: str = "proposal"
 
 
+def _topic_from_profile(profile) -> str:
+    """Derive a research topic from the approved profile, with a safe fallback."""
+    if not isinstance(profile, dict):
+        return "the research document specified by the approved research profile"
+    for key in ("topic", "title", "research_topic", "research_title", "objectives", "goal"):
+        val = profile.get(key)
+        if val:
+            return str(val)[:300]
+    return "the research document specified by the approved research profile"
+
+
 @app.post("/api/local/projects/{project_uuid}/generate-complete")
 async def generate_complete(project_uuid: str, body: GenerateBody, request: Request):
+    session, sid = _load_session(request)
+    if session is None and sid is None:
+        return JSONResponse(status_code=401, content={"kind": "auth", "message": "Please log in."})
+
+    # DeepSeek agent path: generate the full document from the approved profile
+    # via orchestrator-workers, replacing nuruxplore's queued generation.
+    if _uses_agents(session):
+        state = _agent_state.get(project_uuid, {})
+        profile = state.get("profile")
+        if not profile:
+            return JSONResponse(
+                status_code=400,
+                content={"kind": "need_profile", "message": "Build and approve a research profile first."},
+            )
+        agent_client = _agent_client()
+        started = time.monotonic()
+        try:
+            topic = _topic_from_profile(profile)
+            title, doc, ledger = await agent_run_research(agent_client, Ledger(), topic, profile)
+        except AgentsError as exc:
+            return JSONResponse(status_code=502, content={"kind": "agent", "message": str(exc)})
+        except ApiError as exc:
+            return _error_response(exc)
+        wall_s = round(time.monotonic() - started, 1)
+        word_count = len(doc.split())
+        _agent_state[project_uuid] = {**state, "title": title, "text": doc, "status": "completed", "word_count": word_count}
+        return {
+            "queued": True,
+            "agent": "deepseek",
+            "status": "completed",
+            "word_count": word_count,
+            "wall_time_s": wall_s,
+            "usage": {**ledger.summary(), "wall_time_s": wall_s},
+        }
+
     return await _run(request, lambda c, s: c.generate_complete(project_uuid, body.type))
 
 
 @app.get("/api/local/projects/{project_uuid}/generation-status")
 async def generation_status(project_uuid: str, request: Request):
+    session, sid = _load_session(request)
+    if session is None and sid is None:
+        return JSONResponse(status_code=401, content={"kind": "auth", "message": "Please log in."})
+    # Agent docs complete synchronously; surface that instead of a live queue.
+    if _uses_agents(session):
+        state = _agent_state.get(project_uuid)
+        if state and state.get("status") == "completed":
+            return {
+                "status": "completed",
+                "progress": 1.0,
+                "steps": 1,
+                "current_step": "done",
+                "word_count": state.get("word_count", 0),
+                "title": state.get("title"),
+                "agent": "deepseek",
+            }
     result = await _run(request, lambda c, s: c.generation_status(project_uuid))
     if isinstance(result, JSONResponse):
         return result
     if result.get("status") == "failed":
         return {**result, **FAILED_JOB}
     return result
+
+
+@app.get("/api/local/projects/{project_uuid}/content")
+async def project_content(project_uuid: str, request: Request):
+    """Return the agent-generated document text (DeepSeek path only)."""
+    session, sid = _load_session(request)
+    if session is None and sid is None:
+        return JSONResponse(status_code=401, content={"kind": "auth", "message": "Please log in."})
+    state = _agent_state.get(project_uuid)
+    if _uses_agents(session) and state and state.get("text"):
+        return {
+            "title": state.get("title", ""),
+            "text": state["text"],
+            "word_count": state.get("word_count", 0),
+            "agent": "deepseek",
+        }
+    return JSONResponse(
+        status_code=404,
+        content={"kind": "not_found", "message": "No agent-generated content for this project."},
+    )
 
 
 @app.post("/api/local/projects/{project_uuid}/export/pdf")
@@ -273,6 +446,31 @@ async def export_pdf(project_uuid: str, request: Request):
 @app.post("/api/local/projects/{project_uuid}/export/word")
 async def export_word(project_uuid: str, request: Request):
     return await _run(request, lambda c, s: c.export_document(project_uuid, "word"))
+
+
+def _recent_messages(client, project_uuid: str, n: int = 8) -> list[dict]:
+    """Pull the project's recent message list for agent context (defensive)."""
+    try:
+        body = client._request("GET", f"/api/projects/{project_uuid}/messages")
+    except ApiError:
+        return []
+    msgs = body.get("messages") if isinstance(body, dict) else body
+    if not isinstance(msgs, list):
+        return []
+    out = []
+    for m in msgs[-n:]:
+        if not isinstance(m, dict):
+            continue
+        content = (
+            m.get("content")
+            or m.get("message")
+            or (m.get("assistant_message") or {}).get("content")
+            or ""
+        )
+        role = m.get("role") or m.get("sender") or "assistant"
+        if content:
+            out.append({"role": role, "content": str(content)})
+    return out
 
 
 # ------------------------------------------------------------- helpers

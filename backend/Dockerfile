@@ -13,6 +13,7 @@ RUN apt-get update \
 
 COPY app/ ./app/
 COPY nuruxplore/ ./nuruxplore/
+COPY agents/ ./agents/
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -59,7 +59,15 @@ function readSessions(storageKey: string): Session[] {
   }
 }
 
-export function ChatScreen({ onCredits, userKey }: { onCredits: () => void; userKey?: string }) {
+export function ChatScreen({
+  onCredits,
+  userKey,
+  agentsOn,
+}: {
+  onCredits: () => void;
+  userKey?: string;
+  agentsOn?: boolean;
+}) {
   const storageKey = `nx-chat-sessions${userKey ? `:${userKey}` : ""}`;
 
   const [sessions, setSessions] = useState<Session[]>(() => readSessions(storageKey));
@@ -296,7 +304,9 @@ export function ChatScreen({ onCredits, userKey }: { onCredits: () => void; user
                     Chat with NuruXplore
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Ask anything about your research — each reply uses 1 credit.
+                    {agentsOn
+                      ? "Ask anything about your research — replies come from DeepSeek agents (no credits spent)."
+                      : "Ask anything about your research — each reply uses 1 credit."}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -362,7 +372,9 @@ export function ChatScreen({ onCredits, userKey }: { onCredits: () => void; user
               </Button>
             </div>
             <p className="folio">
-              Use Research Expert for proposals &amp; theses · 1 CR per reply
+              {agentsOn
+                ? "DeepSeek agents on · chat uses no credits"
+                : "Use Research Expert for proposals &amp; theses · 1 CR per reply"}
             </p>
           </div>
         </div>

@@ -1,0 +1,61 @@
+id,dept,year,study_hours_wk,sleep_hours,stress_1to10,social_hours_wk,self_reported_gpa,used_ai_tools
+1,Economics,2,33,7.1,4,17,2.55,yes
+2,Engineering,2,10,4.8,9,2,2.79,no
+3,Computer Science,grad,15,8.3,3,18,3.34,yes
+4,Biology,1,16,5.7,5,17,2.59,no
+5,Engineering,2,14,6.8,6,11,2.56,yes
+6,Engineering,1,21,6.5,9,10,3.14,no
+7,Economics,3,23,7.7,6,2,3.32,no
+8,Economics,4,26,6.9,4,3,3.22,yes
+9,Economics,2,39,6.2,4,17,3.32,no
+10,Economics,3,39,6.8,10,2,3.74,no
+11,Psychology,1,11,7.4,7,20,3.32,no
+12,Economics,4,30,4.6,10,11,2.67,yes
+13,Psychology,1,21,7.6,5,7,3.04,no
+14,Computer Science,2,36,6.1,7,4,3.71,no
+15,Mathematics,4,30,7.2,9,7,2.64,yes
+16,Biology,2,22,4.5,5,8,2.85,yes
+17,Psychology,grad,31,6.9,8,4,3.5,yes
+18,Psychology,grad,33,6.1,9,3,3.17,no
+19,Computer Science,2,12,8.4,10,5,2.58,yes
+20,Computer Science,1,17,6.6,8,19,2.44,yes
+21,Engineering,4,17,7.0,8,19,2.98,yes
+22,Computer Science,4,37,6.4,7,2,2.63,no
+23,Mathematics,3,38,7.8,5,16,2.44,no
+24,Biology,grad,9,7.5,7,20,3.78,no
+25,Engineering,3,18,5.9,6,17,3.27,no
+26,Mathematics,2,20,7.7,9,7,2.72,no
+27,Economics,1,9,7.7,10,8,2.71,no
+28,Psychology,3,31,4.8,4,7,3.15,no
+29,Biology,4,8,6.4,8,20,2.54,yes
+30,Psychology,2,38,8.1,9,20,2.93,no
+31,Psychology,4,13,7.4,5,4,2.44,no
+32,Mathematics,2,38,7.1,8,4,3.28,yes
+33,Computer Science,1,14,6.6,5,13,3.98,yes
+34,Biology,1,24,5.4,6,18,2.92,no
+35,Biology,1,30,8.1,9,16,2.61,yes
+36,Engineering,grad,9,8.0,5,19,2.41,yes
+37,Biology,2,38,7.0,4,17,2.5,no
+38,Computer Science,grad,11,5.5,7,1,3.64,no
+39,Engineering,1,12,6.3,6,8,3.12,no
+40,Engineering,2,24,8.2,6,14,2.62,yes
+41,Psychology,4,28,4.8,6,13,2.52,no
+42,Computer Science,2,31,5.1,5,14,2.75,yes
+43,Psychology,4,18,8.5,6,5,3.53,no
+44,Economics,4,20,5.9,4,11,2.43,no
+45,Psychology,1,32,5.8,7,16,3.94,yes
+46,Biology,1,13,5.6,3,5,2.83,yes
+47,Psychology,3,33,5.1,10,10,2.54,yes
+48,Mathematics,2,35,8.1,7,0,3.42,no
+49,Computer Science,grad,22,4.8,4,14,2.42,no
+50,Economics,grad,16,4.7,6,3,3.95,no
+51,Computer Science,2,20,8.2,7,16,3.62,no
+52,Psychology,grad,19,5.6,3,8,2.46,yes
+53,Mathematics,grad,20,6.6,6,14,2.57,no
+54,Mathematics,4,33,8.4,7,6,3.97,no
+55,Biology,2,33,8.5,3,4,2.42,no
+56,Psychology,2,11,4.8,9,16,3.47,no
+57,Engineering,2,26,4.7,5,5,2.83,yes
+58,Economics,3,29,8.4,8,7,2.46,no
+59,Biology,3,19,4.5,9,2,3.16,yes
+60,Biology,grad,8,4.9,4,4,3.04,yes

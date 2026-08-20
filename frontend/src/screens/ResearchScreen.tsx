@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { toast } from "sonner";
 import {
   FilePlus2, UploadCloud, ClipboardList, PenLine, Rocket, CheckCircle2,
-  Loader2, FileDown, FileText, AlertTriangle, Zap, FolderPlus, Send,
+  Loader2, FileDown, FileText, AlertTriangle, Zap, FolderPlus, Send, Cpu as CpuIcon, Download, Eye,
 } from "lucide-react";
-import { api, errorTitle, type ApiError, type GenerationStatus, type OutlineResult, type ResearchProfile } from "../lib/api";
+import { api, errorTitle, type AgentContent, type ApiError, type GenerationStatus, type OutlineResult, type ResearchProfile } from "../lib/api";
 import { cn } from "../lib/utils";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -31,7 +31,7 @@ const POLL_MAX = 360;
 
 type Role = "proposal" | "dataset" | "reference";
 
-export function ResearchScreen({ onCredits }: { onCredits: () => void }) {
+export function ResearchScreen({ onCredits, agentsOn }: { onCredits: () => void; agentsOn?: boolean }) {
   const [type, setType] = useState<"proposal" | "thesis">("proposal");
   const [topic, setTopic] = useState("");
   const [step, setStep] = useState("create");
@@ -387,8 +387,16 @@ export function ResearchScreen({ onCredits }: { onCredits: () => void }) {
           <CardHeader>
             <CardTitle>Generate document</CardTitle>
             <CardDescription>
-              Queues a full {type} in the background and charges{" "}
-              <span className="font-semibold text-foreground">{COST[type]}</span> up front.
+              {agentsOn ? (
+                <>
+                  Generate a full {type} with the DeepSeek multi-agent graph (cheap, no credit queue).
+                </>
+              ) : (
+                <>
+                  Queues a full {type} in the background and charges{" "}
+                  <span className="font-semibold text-foreground">{COST[type]}</span> up front.
+                </>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
@@ -398,14 +406,22 @@ export function ResearchScreen({ onCredits }: { onCredits: () => void }) {
               </pre>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => setConfirmOpen(true)} variant="destructive">
+              <Button
+                onClick={() => (agentsOn ? startGenerate() : setConfirmOpen(true))}
+                variant={agentsOn ? "primary" : "destructive"}
+              >
                 <Rocket className="size-4" />
-                Generate {type} ({COST[type]})
+                {agentsOn ? `Generate ${type} (DeepSeek agents)` : `Generate ${type} (${COST[type]})`}
               </Button>
-              {type === "thesis" && (
+              {type === "thesis" && !agentsOn && (
                 <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                   <AlertTriangle className="size-3.5 text-warning" />
                   Thesis costs 400–600 credits — most of a full budget on its own.
+                </p>
+              )}
+              {agentsOn && (
+                <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <CpuIcon className="size-3.5" /> Orchestrator plans → ≤3 writers in parallel → composer.
                 </p>
               )}
             </div>
@@ -474,12 +490,20 @@ export function ResearchScreen({ onCredits }: { onCredits: () => void }) {
               Document generated
             </CardTitle>
             <CardDescription>
-              {gen?.word_count ? `${gen.word_count.toLocaleString()} words · ` : ""}export your finished {type}.
+              {agentsOn
+                ? `Generated with DeepSeek agents${gen?.word_count ? ` · ${gen.word_count.toLocaleString()} words` : ""}. Review and download below.`
+                : `${gen?.word_count ? `${gen.word_count.toLocaleString()} words · ` : ""}export your finished ${type}.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            <ExportButton fmt="pdf" label="Export PDF" icon={<FileText className="size-4" />} projectUuid={projectUuid} onCredits={onCredits} />
-            <ExportButton fmt="word" label="Export Word" icon={<FileDown className="size-4" />} projectUuid={projectUuid} onCredits={onCredits} />
+            {agentsOn ? (
+              <AgentResult projectUuid={projectUuid} />
+            ) : (
+              <>
+                <ExportButton fmt="pdf" label="Export PDF" icon={<FileText className="size-4" />} projectUuid={projectUuid} onCredits={onCredits} />
+                <ExportButton fmt="word" label="Export Word" icon={<FileDown className="size-4" />} projectUuid={projectUuid} onCredits={onCredits} />
+              </>
+            )}
           </CardContent>
         </Card>
       )}
@@ -550,5 +574,62 @@ function ExportButton({
       {busy ? <Loader2 className="size-4 animate-spin" /> : icon}
       {label}
     </Button>
+  );
+}
+
+/** DeepSeek path: fetch the agent-generated document, preview it and allow a
+ *  local .md download (no nuruxplore export needed). */
+function AgentResult({ projectUuid }: { projectUuid: string }) {
+  const [data, setData] = useState<AgentContent | null>(null);
+  const [busy, setBusy] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const c = await api<AgentContent>(`/api/local/projects/${projectUuid}/content`);
+        setData(c);
+      } catch {
+        toast.error("Could not load the generated document.");
+      } finally {
+        setBusy(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectUuid]);
+
+  if (busy) return <Loader2 className="size-4 animate-spin text-primary" />;
+  if (!data?.text) return <p className="text-sm text-muted-foreground">No document text available.</p>;
+
+  const download = () => {
+    const blob = new Blob([`# ${data.title ?? "Research Document"}\n\n${data.text}`], {
+      type: "text/markdown",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(data.title ?? "document").replace(/[^\w\-]+/g, "_").slice(0, 60)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="grid w-full gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="folio inline-flex items-center gap-1.5 border border-(--accent)/40 px-2 py-1 text-xs">
+          <CpuIcon className="size-3" /> DEEPSEEK · {data.word_count?.toLocaleString() ?? 0} WORDS
+        </span>
+        <Button variant="secondary" size="sm" onClick={download} className="ml-auto">
+          <Download className="size-4" /> Download .md
+        </Button>
+      </div>
+      <details className="rounded-lg border border-(--border)">
+        <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground">
+          <Eye className="size-4" /> Preview document
+        </summary>
+        <pre className="scroll-thin max-h-[28rem] overflow-auto border-t border-(--border) whitespace-pre-wrap p-4 font-mono text-xs leading-relaxed">
+          {data.text}
+        </pre>
+      </details>
+    </div>
   );
 }
