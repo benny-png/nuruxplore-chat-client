@@ -294,12 +294,14 @@ async def _run(request: Request, fn):
 
 
 # ------------------------------------------------------------ static UI
-# Serve the built React SPA. Assets live under /assets (Vite output); the root
-# returns index.html. The API lives under /api/local/* (registered above).
+# Serve the built React SPA when it is present. Assets live under /assets
+# (Vite output); the root returns index.html. The API lives under /api/local/*
+# (registered above). In the split deployment the React frontend is served by
+# its own nginx container and FastAPI runs API-only, so these routes are
+# optional: they only mount when a web/dist build actually exists.
+if STATIC_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")
 
-app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")
-
-
-@app.get("/")
-async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    @app.get("/")
+    async def index():
+        return FileResponse(STATIC_DIR / "index.html")

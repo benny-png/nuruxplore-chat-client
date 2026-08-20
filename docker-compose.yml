@@ -1,14 +1,32 @@
-# NuruXplore web app (FastAPI + React).
-# Follows the Ecofy house pattern: one external docker network per project,
-# nginx-proxy-manager joins that network and reverse-proxies to the container
-# by name (no public host port; loopback port is for local debugging only).
+# NuruXplore web app — split into a React frontend (nginx) and a FastAPI API.
+# Follows the Ecofy house pattern: both services share one external docker
+# network per project; nginx-proxy-manager joins that network and reverse-proxies
+# by container name. Loopback ports are for local debugging only (no public
+# exposure from the app itself).
+#
+#   nuruxplore.ecofy.co.tz    -> nuruxplore-web:80   (React SPA + /api proxy)
+#   nuruxploreapi.ecofy.co.tz -> nuruxplore-api:8000 (FastAPI directly)
 services:
-  app:
+  web:
     build:
       context: .
-      dockerfile: Dockerfile
-    image: nuruxplore-app
-    container_name: nuruxplore-app
+      dockerfile: Dockerfile.web
+    image: nuruxplore-web
+    container_name: nuruxplore-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8020:80"
+    depends_on:
+      - api
+    networks:
+      - nuruxplore-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: nuruxplore-api
+    container_name: nuruxplore-api
     restart: unless-stopped
     env_file:
       - .env
