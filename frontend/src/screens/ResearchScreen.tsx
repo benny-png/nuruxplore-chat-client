@@ -63,9 +63,10 @@ export function ResearchScreen({ onCredits, agentsOn }: { onCredits: () => void;
 
   const createProject = async () => {
     setBusy("create");
-    // Topic is optional: a data-only thesis just uploads its source and builds
-    // the profile from that. Default title avoids a dead-end when blank.
-    const title = topic.trim() || "Untitled research document";
+    // Topic is optional and only editable in Proposal mode (the field is hidden
+    // for Thesis, which is driven by the uploaded proposal + its title). A
+    // sensible default avoids a dead-end when the prompt is blank.
+    const title = topic.trim() || (type === "thesis" ? "Untitled thesis" : "Untitled proposal");
     try {
       const r = await api<{ project_uuid: string }>("/api/local/projects", {
         method: "POST",
@@ -236,16 +237,18 @@ export function ResearchScreen({ onCredits, agentsOn }: { onCredits: () => void;
             </Tabs>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="topic">Research topic / prompt <span className="text-muted-foreground">(optional)</span></Label>
-            <Textarea
-              id="topic"
-              rows={3}
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="Optional — for data-only theses you can leave this blank and just upload your dataset/source."
-            />
-          </div>
+          {type === "proposal" && (
+            <div className="grid gap-2">
+              <Label htmlFor="topic">Research topic / prompt</Label>
+              <Textarea
+                id="topic"
+                rows={3}
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="e.g. Impact of mobile money adoption on the financial inclusion of smallholder farmers in Tanzania"
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
