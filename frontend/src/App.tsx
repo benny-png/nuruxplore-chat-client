@@ -16,7 +16,11 @@ const AGENTS_KEY = "nx-agents";
 /** DeepSeek agent toggle — mirrored to localStorage and the backend session.
  *  When the server has no key configured, the switch shows as disabled. */
 function useAgentsPref() {
-  const [on, setOn] = useState<boolean>(() => localStorage.getItem(AGENTS_KEY) === "1");
+  // Agent mode is the default; a saved explicit preference overrides it.
+  const [on, setOn] = useState<boolean>(() => {
+    const saved = localStorage.getItem(AGENTS_KEY);
+    return saved !== null ? saved === "1" : true;
+  });
   const [available, setAvailable] = useState(false);
   const [model, setModel] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);

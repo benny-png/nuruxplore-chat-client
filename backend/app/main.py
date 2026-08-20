@@ -58,8 +58,10 @@ class _Session:
         self.password = password
         self.client = NuruXploreClient.from_credentials(BASE_URL, email, password, timeout=TIMEOUT)
         self._logged_in = False
-        # DeepSeek agent toggle, per session (mirrors the UI switch).
-        self.use_agents = False
+        # DeepSeek agent toggle, per session (mirrors the UI switch). Defaults
+        # to ON when the server is configured for agents, so the agentic path is
+        # the out-of-the-box experience; users can still flip it OFF.
+        self.use_agents = agents_mod.available()
 
     def ensure_login(self) -> NuruXploreClient:
         if not self._logged_in:
