@@ -42,8 +42,12 @@ def enabled() -> bool:
 
 
 def max_workers() -> int:
-    """Cap on parallel worker fan-out (bounds both time and tokens)."""
-    return max(1, int(os.environ.get("NURUXPLORE_AGENTS_MAX_WORKERS", "3")))
+    """How many full-length chapters the planner may spawn (parallel fan-out).
+
+    Parallel workers overlap in wall time, so a higher cap adds length without
+    a proportional latency hit.
+    """
+    return max(1, int(os.environ.get("NURUXPLORE_AGENTS_MAX_WORKERS", "6")))
 
 
 def optimizer_rounds() -> int:
@@ -52,7 +56,7 @@ def optimizer_rounds() -> int:
 
 
 def timeout() -> float:
-    return float(os.environ.get("DEEPINFRA_TIMEOUT", "120"))
+    return float(os.environ.get("DEEPINFRA_TIMEOUT", "240"))
 
 
 def retries() -> int:

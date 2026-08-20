@@ -421,7 +421,7 @@ export function ResearchScreen({ onCredits, agentsOn }: { onCredits: () => void;
               )}
               {agentsOn && (
                 <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <CpuIcon className="size-3.5" /> Orchestrator plans → ≤3 writers in parallel → composer.
+                  <CpuIcon className="size-3.5" /> Orchestrator plans → full-length chapters in parallel → editor frame.
                 </p>
               )}
             </div>

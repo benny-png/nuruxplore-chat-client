@@ -103,10 +103,12 @@ async def run_research(
     topic: str,
     profile: dict,
 ) -> tuple[str, str, Ledger]:
-    """Orchestrator-workers: plan -> parallel section drafts -> compose.
+    """Orchestrator-workers, full-length: plan -> parallel full chapters -> frame.
 
-    Returns ``(title, document_markdown, ledger)``. Bounded to <=3 sections and a
-    single compose pass — predictable credit spend and latency.
+    Returns ``(title, document_markdown, ledger)``. Each writer produces a
+    full-length chapter; the editor writes only front/back matter from the
+    chapter plan, and the chapters are embedded verbatim into the final merge —
+    so total length is the SUM of the chapters, not capped by one response.
     """
     profile_block = json.dumps(profile, default=str)[:2500]
 
@@ -120,30 +122,31 @@ async def run_research(
     )
     title = title or "Research Document"
 
-    # 2) planning lead -> split into section jobs
+    # 2) planning lead -> split into full-chapter jobs
     plan_prompt = (
         f"Topic:\n{topic}\n\nApproved research profile:\n{profile_block}\n\n"
-        "Plan the outline (max 3 sections) as JSON: "
+        "Plan the full-length outline (5-6 chapters) as JSON: "
         '{"title": str, "sections": [{"title": str, "brief": str}]}.'
     )
     plan_text = await _complete(client, ledger, "scope-lead", A.SCOPE_LEAD, plan_prompt)
+    plan = _extract_json(plan_text)
+    plan_sections = (plan or {}).get("sections") or []
 
-    def _jobs_from_plan(text: str) -> list[tuple[str, tuple]]:
-        parsed = _extract_json(text)
-        sections = (parsed or {}).get("sections") or []
+    def _jobs_from_plan() -> list[tuple[str, tuple]]:
         jobs = []
-        for i, sec in enumerate(sections[: config.max_workers()]):
-            sec_title = sec.get("title", f"Section {i + 1}")
+        for i, sec in enumerate(plan_sections[: config.max_workers()]):
+            sec_title = sec.get("title", f"Chapter {i + 1}")
             brief = sec.get("brief", "")
             prompt = (
                 f"Topic: {topic}\n\nApproved research profile:\n{profile_block}\n\n"
-                f"Your section: {sec_title}\nBrief: {brief}\n\n"
-                "Write this section in markdown, grounded in the profile above. "
-                "Never invent citations or data."
+                f"Your chapter: {sec_title}\nBrief: {brief}\n\n"
+                "Write this FULL-LENGTH chapter in markdown with headers and rich, "
+                "detailed prose, grounded in the profile above. Never invent citations "
+                "or data."
             )
             jobs.append(
                 (
-                    f"section {sec_title}",
+                    f"chapter {sec_title}",
                     (A.SECTION_WRITER.system, prompt,
                      {"max_tokens": A.SECTION_WRITER.max_tokens,
                       "temperature": A.SECTION_WRITER.temperature}),
@@ -151,20 +154,35 @@ async def run_research(
             )
         return jobs
 
-    # 3) workers write sections in parallel; composer merges
-    jobs = _jobs_from_plan(plan_text)
-    sections = await run_parallel(
-        client, ledger, jobs, concurrency=config.max_workers()
+    # 3) writers each produce a full chapter, in parallel
+    jobs = _jobs_from_plan()
+    chapters = await run_parallel(client, ledger, jobs, concurrency=config.max_workers())
+
+    # 4) editor writes front/back matter from the PLAN (not the bodies), so the
+    #    final merge embeds chapters verbatim and is genuinely full-length.
+    plan_snapshot = "\n".join(
+        f"- {s.get('title', f'Chapter {i+1}')}: {s.get('brief', '')}"
+        for i, s in enumerate(plan_sections)
+    ) or "as planned"
+    edit_prompt = (
+        f"Document title: {title}\n\nChapter plan (bodies already written by other "
+        f"agents):\n{plan_snapshot}\n\n"
+        "Write the editorial frame only — front_matter (abstract + introduction) and "
+        "back_matter (conclusion + references). Do not reproduce chapter bodies. "
+        'Return JSON: {"front_matter": str, "back_matter": str}.'
     )
+    edit_out = await _complete(client, ledger, "editor", A.COMPOSER, edit_prompt)
+    parsed = _extract_json(edit_out)
+    front_matter = (parsed or {}).get("front_matter", "") or ""
+    back_matter = (parsed or {}).get("back_matter", "") or ""
 
-    def _merge(body: str):
-        prompt = (
-            f"Title: {title}\n\nMerge these drafted sections into one coherent academic "
-            "document in markdown — continuous numbering, brief intro + conclusion, "
-            "remove duplication. Keep all substance.\n\nSections:\n{body}"
-        )
-        return _complete(client, ledger, "compose", A.COMPOSER, prompt)
-
-    body = "\n\n---\n\n".join(sections if sections else ["<empty>"])
-    doc = await _merge(body)
+    # 5) assemble: front matter + all full chapters verbatim + back matter
+    body = []
+    if front_matter:
+        body.append(front_matter.strip())
+    body.extend(ch or f"### {plan_sections[i].get('title', f'Chapter {i+1}')}\n\n_(no content)_"
+                   for i, ch in enumerate(chapters))
+    if back_matter:
+        body.append(back_matter.strip())
+    doc = "\n\n---\n\n".join(body) if body else "<empty>"
     return title, doc, ledger
