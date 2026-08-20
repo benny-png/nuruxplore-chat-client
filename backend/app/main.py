@@ -66,19 +66,19 @@ _sessions: dict[str, _Session] = {}
 def _load_session(request: Request) -> tuple[_Session | None, str]:
     """Return (session, sid) for this request.
 
-    A cookie-bound session is reused if present. Otherwise, if environment
-    credentials are configured, provision one automatically. If neither, return
-    (None, None) so the caller can reply 401 and the UI shows the login form.
+    A cookie-bound session is reused if present. Otherwise we return
+    (None, None) so the caller replies 401 and the UI shows the login form.
+
+    Auto-provisioning is intentionally DISABLED: every user must log in with
+    their own nuruxplore.com credentials via /api/local/login. The env
+    credentials (if any) are deliberately NOT used to mint anonymous sessions,
+    so a bare public deployment cannot spend the configured account's credits
+    for unauthenticated visitors.
     """
     sid = request.cookies.get(SESS_COOKIE)
     if sid and sid in _sessions:
         return _sessions[sid], sid
-    if not (ENV_EMAIL and ENV_PASSWORD):
-        return None, None
-    sid = uuid.uuid4().hex
-    session = _Session(ENV_EMAIL, ENV_PASSWORD)
-    _sessions[sid] = session
-    return session, sid
+    return None, None
 
 
 def _error_response(exc: ApiError, status_map: dict[str, int] | None = None) -> JSONResponse:
