@@ -1,0 +1,37 @@
+RESEARCH PROPOSAL
+
+Title: The Impact of Student Use of AI Writing Tools on Academic Wellbeing: A Survey of Undergraduates
+
+1. Background and Problem Statement
+The rapid diffusion of generative AI writing tools (ChatGPT, Grammarly, AI paraphrasing assistants) has transformed how university students produce academic work. Estimates suggest that in many institutions a large minority of undergraduates now use such tools at least weekly. Yet the influence of this usage on genuine academic wellbeing — study habits, sleep, perceived stress, and actual performance — remains poorly understood. Early literature offers conflicting evidence: some studies report productivity and confidence gains, while others flag over-reliance, reduced independent effort, and elevated stress. This study fills that gap by measuring, in a single undergraduate population, how self-reported use of AI tools relates to study hours, sleep duration, self-reported stress, and grade point average.
+
+2. Research Objectives
+The general objective is to determine whether and how student use of AI writing tools is associated with academic wellbeing outcomes.
+Specific objectives:
+  1. To profile the prevalence and intensity of AI tool usage among undergraduates by academic department and year of study.
+  2. To examine the relationship between AI tool usage and study habits (weekly study hours).
+  3. To examine the relationship between AI tool usage and wellbeing indicators (sleep hours and self-reported stress).
+  4. To test whether AI tool usage is associated with differences in self-reported grade point average.
+
+3. Research Questions
+  1. What proportion of undergraduates use AI writing tools, and who uses them most?
+  2. Is there a statistically meaningful difference in study hours between users and non-users of AI tools?
+  3. Are users of AI tools more or less stressed, and do they sleep more or less?
+  4. Is AI tool usage associated with higher or lower self-reported GPA?
+
+4. Methodology
+The study adopts a quantitative, cross-sectional survey design. A structured questionnaire captured, per respondent: department, year of study, average weekly study hours, average nightly sleep hours, self-reported stress (1-10 scale), weekly social hours, self-reported GPA, and a binary indicator of AI tool usage. The resulting dataset contains 60 undergraduate respondents across six departments (Psychology, Biology, Economics, Computer Science, Engineering, Mathematics), enabling descriptive and comparative analysis by usage group and department. Data were analyzed to produce frequency distributions for the categorical variables, numeric summaries for the continuous variables, and group comparisons between AI tool users and non-users.
+
+5. Significance of the Study
+The findings inform evidence-based academic-support policy: they clarify whether institutions should encourage, regulate, or train students in the use of AI writing tools, and whether targeted wellbeing interventions are warranted for heavy users. The study also contributes empirical academic-wellbeing evidence in a developing-country university context where such data are scarce.
+
+6. Expected Findings
+It is expected that AI tool usage will be unevenly distributed by department, and that any observed associations with stress, sleep, and GPA will be modest and heterogeneous — underscoring that usage alone is not a simple predictor of academic wellbeing, and that context (discipline, workload, support) mediates the relationship.
+
+7. Proposed Timeline
+Weeks 1-2: instrument design and ethics review; Weeks 3-4: data collection; Weeks 5-6: data cleaning and analysis; Weeks 7-8: drafting of findings, discussion, and thesis preparation.
+
+8. References
+Chen, X., & Zhang, Y. (2024). Generative AI and student learning outcomes: A review. Journal of Educational Technology, 41(2), 115-130.
+Okoedion, E., & Adepoju, T. (2023). Digital divides in AI-tool adoption among university students. African Journal of Higher Education, 17(3), 210-228.
+Wiley, D., & Hilton, J. (2023). Academic integrity in the age of generative AI. International Review of Research in Open and Distributed Learning, 24(1), 1-19.

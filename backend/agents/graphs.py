@@ -27,6 +27,48 @@ from .client import LLMClient
 from .orchestrator import Ledger, run_parallel
 
 
+def _extract_references(profile) -> list[str]:
+    """Pull the allowed citations out of the approved research profile/source.
+
+    Only references that actually appear in the user's uploaded proposal or data
+    are allowed — the generation must never invent a citation. Best effort across
+    common field names, then a scan for year-in-parens citation-like strings.
+    """
+    if not isinstance(profile, dict):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(s: str) -> None:
+        s = s.strip().strip("-*").strip()
+        if len(s) > 8 and s not in seen:
+            seen.add(s)
+            out.append(s)
+
+    for key in (
+        "references", "reference", "references_list", "bibliography",
+        "sources", "source_list", "citations", "references_used", "works_cited",
+    ):
+        val = profile.get(key)
+        if isinstance(val, list):
+            for item in val:
+                if isinstance(item, dict):
+                    s = item.get("title") or item.get("citation") or item.get("reference") or ""
+                    if s:
+                        add(str(s))
+                else:
+                    add(str(item))
+        elif isinstance(val, str):
+            for line in val.splitlines():
+                add(line)
+
+    if not out:
+        blob = json.dumps(profile, default=str)
+        for m in re.findall(r"[A-Z][A-Za-zÀ-ÿ&\-]+(?: and [A-Z][A-Za-zÀ-ÿ&\-]+)?:\s.+?\([12]\d{3}\).{0,90}", blob):
+            add(m)
+    return out[:25]
+
+
 def _extract_json(text: str) -> dict | None:
     """Pull the first JSON object out of an LLM reply (tolerates prose/fences)."""
     text = text.strip()
@@ -102,6 +144,7 @@ async def run_research(
     ledger: Ledger,
     topic: str,
     profile: dict,
+    on_step=None,
 ) -> tuple[str, str, Ledger]:
     """Orchestrator-workers, full-length: plan -> parallel full chapters -> frame.
 
@@ -109,10 +152,26 @@ async def run_research(
     full-length chapter; the editor writes only front/back matter from the
     chapter plan, and the chapters are embedded verbatim into the final merge —
     so total length is the SUM of the chapters, not capped by one response.
+
+    ``on_step(label)`` is an optional callback fired before each phase, so the
+    UI can surface live generation progress.
     """
+
+    def step(label: str) -> None:
+        if on_step:
+            on_step(label)
+
     profile_block = json.dumps(profile, default=str)[:2500]
+    refs = _extract_references(profile)
+    refs_block = "\n".join(f"- {r}" for r in refs) if refs else "(none provided)"
+    refs_instruction = (
+        "\n\nALLOWED REFERENCES (cite ONLY these — never invent an author, title, or year):\n"
+        f"{refs_block}\n"
+        "If this is '(none provided)', do not cite anything."
+    )
 
     # 1) title (cheap, single call)
+    step("Choosing a title from the proposal/profile…")
     title = await _complete(
         client,
         ledger,
@@ -123,6 +182,7 @@ async def run_research(
     title = title or "Research Document"
 
     # 2) planning lead -> split into full-chapter jobs
+    step("Planning the full-length outline…")
     plan_prompt = (
         f"Topic:\n{topic}\n\nApproved research profile:\n{profile_block}\n\n"
         "Plan the full-length outline (5-6 chapters) as JSON: "
@@ -141,8 +201,8 @@ async def run_research(
                 f"Topic: {topic}\n\nApproved research profile:\n{profile_block}\n\n"
                 f"Your chapter: {sec_title}\nBrief: {brief}\n\n"
                 "Write this FULL-LENGTH chapter in markdown with headers and rich, "
-                "detailed prose, grounded in the profile above. Never invent citations "
-                "or data."
+                "detailed prose, grounded in the profile above. Never invent data."
+                f"{refs_instruction}"
             )
             jobs.append(
                 (
@@ -156,10 +216,12 @@ async def run_research(
 
     # 3) writers each produce a full chapter, in parallel
     jobs = _jobs_from_plan()
+    step(f"Writing {len(jobs)} full-length chapters in parallel…")
     chapters = await run_parallel(client, ledger, jobs, concurrency=config.max_workers())
 
     # 4) editor writes front/back matter from the PLAN (not the bodies), so the
     #    final merge embeds chapters verbatim and is genuinely full-length.
+    step("Writing introduction, conclusion & references…")
     plan_snapshot = "\n".join(
         f"- {s.get('title', f'Chapter {i+1}')}: {s.get('brief', '')}"
         for i, s in enumerate(plan_sections)
@@ -169,6 +231,7 @@ async def run_research(
         f"agents):\n{plan_snapshot}\n\n"
         "Write the editorial frame only — front_matter (abstract + introduction) and "
         "back_matter (conclusion + references). Do not reproduce chapter bodies. "
+        f"References must list ONLY these allowed references (never invent):\n{refs_block}\n"
         'Return JSON: {"front_matter": str, "back_matter": str}.'
     )
     edit_out = await _complete(client, ledger, "editor", A.COMPOSER, edit_prompt)
@@ -177,6 +240,7 @@ async def run_research(
     back_matter = (parsed or {}).get("back_matter", "") or ""
 
     # 5) assemble: front matter + all full chapters verbatim + back matter
+    step("Assembling the final document…")
     body = []
     if front_matter:
         body.append(front_matter.strip())

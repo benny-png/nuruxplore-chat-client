@@ -10,7 +10,6 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Textarea } from "../components/ui/textarea";
 import { Label } from "../components/ui/label";
-import { Select } from "../components/ui/select";
 import { Progress } from "../components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Stepper } from "../components/ui/stepper";
@@ -29,17 +28,16 @@ const COST: Record<string, string> = { proposal: "~108 credits", thesis: "400–
 const POLL_MS = 2000;
 const POLL_MAX = 360;
 
-type Role = "proposal" | "dataset" | "reference";
-
 export function ResearchScreen({ onCredits, agentsOn }: { onCredits: () => void; agentsOn?: boolean }) {
   const [type, setType] = useState<"proposal" | "thesis">("proposal");
   const [topic, setTopic] = useState("");
   const [step, setStep] = useState("create");
   const [projectUuid, setProjectUuid] = useState<string | null>(null);
 
-  // upload
+  // upload — the document role is derived from the mode: a thesis is built
+  // FROM a proposal (upload a proposal doc); a proposal is built FROM data
+  // (upload a dataset/survey). No manual role toggle.
   const [file, setFile] = useState<File | null>(null);
-  const [role, setRole] = useState<Role>("proposal");
   const [drag, setDrag] = useState(false);
 
   // profile
@@ -83,17 +81,21 @@ export function ResearchScreen({ onCredits, agentsOn }: { onCredits: () => void;
     }
   };
 
+  const uploadRole = type === "thesis" ? "proposal" : "dataset";
+  const acceptExt = type === "thesis" ? ".pdf,.docx,.txt" : ".csv,.xlsx,.txt";
+
   const uploadSource = async () => {
     if (!projectUuid) return toast.error("Create a project first, then upload into it.");
-    if (!file) return toast.error("Choose a source file first (PDF/DOCX/TXT/CSV/XLSX).");
+    if (!file) return toast.error(`Choose a ${type === "thesis" ? "proposal" : "data"} file first.`);
     setBusy("upload");
+    const role = uploadRole;
     const fd = new FormData();
     fd.append("file", file);
     fd.append("document_role", role);
     fd.append("type", role);
     try {
       await api(`/api/local/projects/${projectUuid}/upload`, { method: "POST", body: fd });
-      toast.success("Source uploaded & extracted");
+      toast.success(type === "thesis" ? "Proposal uploaded — building thesis from it" : "Data uploaded — building proposal from it");
       setStep("profile");
     } catch (err) {
       fail(err);
@@ -279,10 +281,11 @@ export function ResearchScreen({ onCredits, agentsOn }: { onCredits: () => void;
       {projectUuid && step === "upload" && (
         <Card>
           <CardHeader>
-            <CardTitle>Upload source context</CardTitle>
+            <CardTitle>{type === "thesis" ? "Upload your proposal" : "Upload your data"}</CardTitle>
             <CardDescription>
-              Upload a proposal, survey, or dataset (PDF, DOCX, TXT, CSV, XLSX) so the AI can build an accurate
-              research profile.
+              {type === "thesis"
+                ? "A thesis is written from a real proposal. Upload the approved proposal (PDF/DOCX) — its title & scope drive the full thesis."
+                : "A proposal is built from your data. Upload the dataset/survey (CSV/XLSX) — the findings drive a grounded proposal."}
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
@@ -305,30 +308,24 @@ export function ResearchScreen({ onCredits, agentsOn }: { onCredits: () => void;
             >
               <UploadCloud className={cn("size-8", drag ? "text-primary" : "text-muted-foreground")} />
               <p className="text-sm font-medium">
-                {file ? file.name : "Drag & drop your source file, or click to browse"}
+                {file ? file.name : `Drag & drop your ${type === "thesis" ? "proposal" : "data"} file, or click to browse`}
               </p>
-              <p className="text-xs text-muted-foreground">PDF · DOCX · TXT · CSV · XLSX</p>
+              <p className="text-xs text-muted-foreground">
+                {type === "thesis" ? "PDF · DOCX · TXT" : "CSV · XLSX · TXT"}
+              </p>
               <input
                 ref={fileInput}
                 type="file"
                 className="hidden"
-                accept=".pdf,.docx,.txt,.csv,.xlsx"
+                accept={acceptExt}
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
             </label>
 
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="grid min-w-40 gap-1.5">
-                <Label>Document role</Label>
-                <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-                  <option value="proposal">Proposal</option>
-                  <option value="dataset">Dataset</option>
-                  <option value="reference">Reference</option>
-                </Select>
-              </div>
+            <div className="flex flex-wrap items-end justify-end gap-3">
               <Button onClick={uploadSource} disabled={!file || busy === "upload"}>
                 {busy === "upload" ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
-                Upload source
+                {type === "thesis" ? "Upload proposal" : "Upload data"}
               </Button>
             </div>
           </CardContent>

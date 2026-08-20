@@ -15,6 +15,7 @@ failure mode (401 auth, 429 rate limit, 402 insufficient credits, network).
 
 from __future__ import annotations
 
+import asyncio
 import os
 import tempfile
 import time
@@ -89,6 +90,41 @@ def _uses_agents(session) -> bool:
     safely to the existing nuruxplore path.
     """
     return bool(getattr(session, "use_agents", False)) and agents_mod.available()
+
+
+def _agent_step_writer(project_uuid: str):
+    """Return an ``on_step`` callback that writes live progress into state."""
+    def writer(label: str) -> None:
+        st = _agent_state.setdefault(project_uuid, {})
+        st["current_step"] = label
+        idx = st.get("step_index", 0) + 1
+        st["step_index"] = idx
+        # ~6 phases for a research graph -> step up toward 94%, then 100 at done.
+        st["progress"] = max(2, min(94, int(idx * 16)))
+    return writer
+
+
+async def _run_research_bg(project_uuid: str, agent_client: LLMClient, topic: str, profile: dict) -> None:
+    """Run the full-length research graph in the background, reporting progress."""
+    started = time.monotonic()
+    try:
+        ledger = Ledger()
+        title, doc, ledger = await agent_run_research(
+            agent_client, ledger, topic, profile,
+            on_step=_agent_step_writer(project_uuid),
+        )
+        _agent_state[project_uuid].update({
+            "title": title,
+            "text": doc,
+            "status": "completed",
+            "progress": 100,
+            "current_step": "done",
+            "word_count": len(doc.split()),
+            "wall_time_s": round(time.monotonic() - started, 1),
+            "usage": {**ledger.summary(), "wall_time_s": round(time.monotonic() - started, 1)},
+        })
+    except (AgentsError, ApiError) as exc:
+        _agent_state[project_uuid].update({"status": "failed", "message": str(exc)})
 
 
 def _load_session(request: Request) -> tuple[_Session | None, str]:
@@ -361,7 +397,9 @@ async def generate_complete(project_uuid: str, body: GenerateBody, request: Requ
         return JSONResponse(status_code=401, content={"kind": "auth", "message": "Please log in."})
 
     # DeepSeek agent path: generate the full document from the approved profile
-    # via orchestrator-workers, replacing nuruxplore's queued generation.
+    # via orchestrator-workers, replacing nuruxplore's queued generation. The
+    # graph runs in the background and reports live progress to
+    # generation-status, so the UI can show a progress bar + current step.
     if _uses_agents(session):
         state = _agent_state.get(project_uuid, {})
         profile = state.get("profile")
@@ -371,25 +409,16 @@ async def generate_complete(project_uuid: str, body: GenerateBody, request: Requ
                 content={"kind": "need_profile", "message": "Build and approve a research profile first."},
             )
         agent_client = _agent_client()
-        started = time.monotonic()
-        try:
-            topic = _topic_from_profile(profile)
-            title, doc, ledger = await agent_run_research(agent_client, Ledger(), topic, profile)
-        except AgentsError as exc:
-            return JSONResponse(status_code=502, content={"kind": "agent", "message": str(exc)})
-        except ApiError as exc:
-            return _error_response(exc)
-        wall_s = round(time.monotonic() - started, 1)
-        word_count = len(doc.split())
-        _agent_state[project_uuid] = {**state, "title": title, "text": doc, "status": "completed", "word_count": word_count}
-        return {
-            "queued": True,
-            "agent": "deepseek",
-            "status": "completed",
-            "word_count": word_count,
-            "wall_time_s": wall_s,
-            "usage": {**ledger.summary(), "wall_time_s": wall_s},
+        topic = _topic_from_profile(profile)
+        _agent_state[project_uuid] = {
+            "profile": profile,
+            "topic": topic,
+            "status": "queued",
+            "progress": 0,
+            "current_step": "Queued…",
         }
+        asyncio.create_task(_run_research_bg(project_uuid, agent_client, topic, profile))
+        return {"queued": True, "agent": "deepseek", "status": "queued"}
 
     return await _run(request, lambda c, s: c.generate_complete(project_uuid, body.type))
 
@@ -399,17 +428,27 @@ async def generation_status(project_uuid: str, request: Request):
     session, sid = _load_session(request)
     if session is None and sid is None:
         return JSONResponse(status_code=401, content={"kind": "auth", "message": "Please log in."})
-    # Agent docs complete synchronously; surface that instead of a live queue.
+    # Agent docs generate in the background; surface live progress + steps.
     if _uses_agents(session):
-        state = _agent_state.get(project_uuid)
-        if state and state.get("status") == "completed":
+        st = _agent_state.get(project_uuid)
+        if st and st.get("status") == "completed":
             return {
                 "status": "completed",
                 "progress": 1.0,
                 "steps": 1,
                 "current_step": "done",
-                "word_count": state.get("word_count", 0),
-                "title": state.get("title"),
+                "word_count": st.get("word_count", 0),
+                "title": st.get("title"),
+                "agent": "deepseek",
+            }
+        if st and st.get("status") == "failed":
+            return {**st, "kind": "generation_failed"}
+        if st:
+            return {
+                "status": st.get("status", "queued"),
+                "progress": (st.get("progress", 0) or 0) / 100.0,
+                "current_step": st.get("current_step", "Working…"),
+                "word_count": None,
                 "agent": "deepseek",
             }
     result = await _run(request, lambda c, s: c.generation_status(project_uuid))

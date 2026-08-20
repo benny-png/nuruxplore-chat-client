@@ -87,7 +87,9 @@ SECTION_WRITER = Agent(
         "research profile and your chapter brief, write a substantial, academically rigorous "
         "chapter in markdown with headers and flowing, detailed prose — aim for a full-length "
         "chapter, not a summary. Ground everything in the provided profile/context; never "
-        "invent citations or data."
+        "invent data. CITATIONS: only cite a source if it appears in the ALLOWED REFERENCES "
+        "block of your prompt — never invent an author, title, or year. If that block is "
+        "'(none provided)', write the chapter WITHOUT any citations rather than fabricating one."
     ),
     max_tokens=8192,
 )
@@ -100,9 +102,12 @@ COMPOSER = Agent(
         "already produced full-length chapters. From the title and the chapter plan, write "
         "only the editorial frame: a front matter (a strong abstract + a short "
         "introduction that sets up the document) and a back matter (a conclusion that "
-        "synthesizes, plus a references section using only the cited works). Do NOT rewrite "
-        "or reproduce the chapter bodies. Return exactly JSON: {\"front_matter\": str, "
-        "\"back_matter\": str} using markdown."
+        "synthesizes). Include a 'References / Works Cited' section listing ONLY the "
+        "ALLOWED REFERENCES that were actually cited in the chapters — never invent or add "
+        "any reference not in that block. If none were cited, write exactly: 'No external "
+        "sources were cited; this document is grounded entirely in the uploaded source/data'. "
+        "Do NOT rewrite or reproduce the chapter bodies. Return exactly JSON: "
+        "{\"front_matter\": str, \"back_matter\": str} using markdown."
     ),
     max_tokens=2048,
 )

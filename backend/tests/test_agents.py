@@ -15,7 +15,7 @@ import asyncio
 from agents.agents import DRAFTER, SCOPE_LEAD
 from agents.client import Call
 from agents.orchestrator import Ledger, evaluator_optimizer, orchestrator_workers, prompt_chain, run_parallel
-from agents.graphs import _extract_json, chat_reply, run_research
+from agents.graphs import _extract_json, _extract_references, chat_reply, run_research
 
 
 def _run(coro):
@@ -108,6 +108,20 @@ def test_evaluator_optimizer_bounds_rounds():
     _run(evaluator_optimizer(FakeClient(), ledger, generate_fn=generate, evaluate_fn=evaluate, max_rounds=2))
     # initial + 2 regens capped
     assert len(seen) <= 3
+
+
+def test_extract_references_from_profile():
+    refs = _extract_references({
+        "title": "x",
+        "references": [
+            {"title": "Chen, X., & Zhang, Y. (2024). Generative AI and student learning."},
+            {"title": "Wiley, D. (2023). Academic integrity in the age of generative AI."},
+        ],
+    })
+    assert len(refs) == 2
+    assert "Chen" in refs[0]
+    # never returns fabricated data when there are no references
+    assert _extract_references({"title": "no refs here"}) == []
 
 
 def test_extract_json_tolerates_fences():
