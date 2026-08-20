@@ -616,6 +616,9 @@ function AgentResult({ projectUuid }: { projectUuid: string }) {
 
   return (
     <div className="grid w-full gap-3">
+      <h3 className="font-display text-lg font-medium leading-snug text-foreground">
+        {data.title || "Generated document"}
+      </h3>
       <div className="flex flex-wrap items-center gap-2">
         <span className="folio inline-flex items-center gap-1.5 border border-(--accent)/40 px-2 py-1 text-xs">
           <CpuIcon className="size-3" /> DEEPSEEK · {data.word_count?.toLocaleString() ?? 0} WORDS
